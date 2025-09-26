@@ -24,12 +24,14 @@ PLATFORM_SIZE = 0.26416  # meters (length of one platform side)
 MARGIN = 60
 NUM_GRID_LINES = 5 # Number of grid lines, includes left and right
 CYLINDER_SECTOR_COUNT = 20 # Number of sectors on cylinder, how good the circle looks
+Moving_average_window_size = 5  # Number of frames to average for smoothing
 
 SERIAL_PORT = '/dev/ttyACM0'  # adjust as needed
 BAUD_RATE = 115200
 SENSOR_COUNT = 8
 CALIBRATION_SECONDS = 10
-MAGNET_STRENGTH1 = 1.1624647114675248 
+# MAGNET_STRENGTH1 = 1.1624647114675248 
+MAGNET_STRENGTH1 = 1.4
 MAGNET_STRENGTH_RATIO = .5
 
 sensor_mask = [True, True, True, True, True, True, True, False]
@@ -51,7 +53,7 @@ full_sensor_positions = np.array([
 working_indices = [i for i, ok in enumerate(sensor_mask) if ok]
 ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
 
-def calibrate_ambient_field(ser, n_frames=10):
+def calibrate_ambient_field(ser, n_frames=50):
     """Calibrate by measuring average field at each sensor with no stylus present."""
     frames = []
     print("Calibrating ambient magnetic field...")
@@ -300,11 +302,20 @@ running = True
 # PSO options
 options = {'c1': 0.5, 'c2': 0.3, 'w': 0.9}
 
+moving_average_window = []
 while running:
-    
     measured_B_raw = parse_output_matrix()  # updated with each "BREAK"
     measured_B_raw = measured_B_raw[np.array(sensor_mask)]  # filter by mask
     measured_B = measured_B_raw - ambient_field  # shape (7,3)
+    if len(moving_average_window) <= Moving_average_window_size:
+        
+        moving_average_window.append(measured_B)
+        continue
+    else:
+        moving_average_window.pop(0)
+        
+        moving_average_window.append(measured_B_raw)
+    measured_B = np.mean(moving_average_window, axis=0)
     # print(f"Measured B: {measured_B_raw}")
 
     # bounds = (
