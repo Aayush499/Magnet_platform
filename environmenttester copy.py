@@ -16,7 +16,7 @@ from OpenGL.GLU import *
 import numpy as np
 import math
 
- 
+from collections import deque
 
 #--- Visualization parameters
 WIN_SIZE = 600
@@ -287,8 +287,33 @@ def get_direction_from_pitch_yaw(pitch, yaw):
     dz = math.cos(pitch)
     return np.array([dx, dy, dz])
 
-init_visualization()
 
+import numpy as np
+
+class SimpleKalman:
+    def __init__(self, dim=3, process_var=1e-4, meas_var=1e-2):
+        self.x = np.zeros(dim)  # initial state
+        self.P = np.eye(dim)    # initial covariance
+        self.F = np.eye(dim)    # state transition
+        self.H = np.eye(dim)    # measurement function
+        self.Q = process_var * np.eye(dim)  # process noise
+        self.R = meas_var * np.eye(dim)     # measurement noise
+
+    def update(self, z):
+        # Predict
+        x_pred = self.F @ self.x
+        P_pred = self.F @ self.P @ self.F.T + self.Q
+        # Update
+        y = z - self.H @ x_pred
+        S = self.H @ P_pred @ self.H.T + self.R
+        K = P_pred @ self.H.T @ np.linalg.inv(S)
+        self.x = x_pred + K @ y
+        self.P = (np.eye(len(self.x)) - K @ self.H) @ P_pred
+        return self.x
+
+
+init_visualization()
+kf = SimpleKalman(dim=3)
 sensor_positions = full_sensor_positions[np.array(sensor_mask)]
 
 last_best_pos = None
@@ -303,19 +328,22 @@ running = True
 options = {'c1': 0.5, 'c2': 0.3, 'w': 0.9}
 
 moving_average_window = []
+pos_window = deque(maxlen=Moving_average_window_size)
+pitch_window = deque(maxlen=Moving_average_window_size)
+yaw_window = deque(maxlen=Moving_average_window_size)
 while running:
     measured_B_raw = parse_output_matrix()  # updated with each "BREAK"
     measured_B_raw = measured_B_raw[np.array(sensor_mask)]  # filter by mask
     measured_B = measured_B_raw - ambient_field  # shape (7,3)
-    if len(moving_average_window) <= Moving_average_window_size:
+    # if len(moving_average_window) <= Moving_average_window_size:
         
-        moving_average_window.append(measured_B)
-        continue
-    else:
-        moving_average_window.pop(0)
+    #     moving_average_window.append(measured_B)
+    #     continue
+    # else:
+    #     moving_average_window.pop(0)
         
-        moving_average_window.append(measured_B)
-    measured_B = np.mean(moving_average_window, axis=0)
+    #     moving_average_window.append(measured_B)
+    # measured_B = np.mean(moving_average_window, axis=0)
     # print(f"Measured B: {measured_B_raw}")
 
     # bounds = (
@@ -345,6 +373,17 @@ while running:
     # print(bounds)
     stylus_pos = best_pos[:3]
     pitch, yaw = best_pos[3], best_pos[4]
+    pos_window.append(stylus_pos)
+    pitch_window.append(pitch)
+    yaw_window.append(yaw)
+
+    smoothed_pos = np.mean(pos_window, axis=0)
+    smoothed_pitch = np.mean(pitch_window)
+    smoothed_yaw = np.mean(yaw_window)
+
+    #apply kalman filter
+    kf_pos = kf.update(smoothed_pos)
+    
     
     # (B) EVENT HANDLING:
     for event in pygame.event.get():
@@ -400,11 +439,11 @@ while running:
     draw_box(vertices_precalc[0])
     
     # Stylus tip
-    draw_sphere(stylus_pos, radius=0.016, color=(0,0.5,1))
+    draw_sphere(kf_pos, radius=0.016, color=(0,0.5,1))
 
     # Stylus orientation (arrow)
-    stylus_dir = get_direction_from_pitch_yaw(pitch, yaw)
-    draw_arrow(stylus_pos, stylus_dir, length=0.045, color=(1,0,0))
+    stylus_dir = get_direction_from_pitch_yaw(smoothed_pitch, smoothed_yaw)
+    draw_arrow(kf_pos, stylus_dir, length=0.045, color=(1,0,0))
 
     
     
