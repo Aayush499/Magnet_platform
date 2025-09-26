@@ -314,7 +314,7 @@ while running:
     else:
         moving_average_window.pop(0)
         
-        moving_average_window.append(measured_B_raw)
+        moving_average_window.append(measured_B)
     measured_B = np.mean(moving_average_window, axis=0)
     # print(f"Measured B: {measured_B_raw}")
 
