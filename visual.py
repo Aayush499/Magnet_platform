@@ -76,7 +76,7 @@ while True:
         continue
 
     # Parse sensor line
-    parts = line.split(",")
+    # parts = line.split(",")
     if len(parts) != 4:
         continue  # skip malformed
 

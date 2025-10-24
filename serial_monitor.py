@@ -32,6 +32,8 @@ def parse_output_matrix():
             values = list(map(float, line.split()))
             if len(values) == TOTAL_SENSOR_COUNT * 3:
                 matrix = [values[i:i+3] for i in range(0, len(values), 3)]
+                #divide each element by 1e6
+                # matrix = [[val / 1e6 for val in row] for row in matrix]
                 return matrix
             else:
                 print(f"Unexpected number of values: {len(values)}")
